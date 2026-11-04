@@ -14,8 +14,11 @@ if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL is required in production environment")
     DATABASE_URL = "sqlite:///restaurant.db"
 
+connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+
 engine = create_engine(
     DATABASE_URL,
+    connect_args=connect_args,
     poolclass=pool.QueuePool,
     pool_size=int(os.getenv("DB_POOL_SIZE", "10")),
     max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "20")),

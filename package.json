@@ -1,7 +1,7 @@
 {
-  "name": "restaurant-backend",
+  "name": "maitreD_ordering_backend",
   "version": "1.0.0",
-  "description": "Python FastAPI Backend for Restaurant Mobile App",
+  "description": "Python FastAPI Backend for MaitreD Restaurant & Mobile Ordering App",
   "scripts": {
     "start": "python -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload",
     "dev": "python -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload"

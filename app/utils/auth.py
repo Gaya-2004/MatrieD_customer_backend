@@ -7,7 +7,9 @@ from fastapi import HTTPException
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
-    raise ValueError("SECRET_KEY environment variable is not set. A secure key is required for production.")
+    SECRET_KEY = "maitred_super_secret_jwt_key_2026_dev_testing"
+    if os.getenv("ENVIRONMENT", "development").lower() == "production":
+        raise ValueError("SECRET_KEY environment variable is not set. A secure key is required for production.")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
@@ -104,4 +106,4 @@ def create_token(user, account_type: str = "USER", expires_delta: timedelta = No
         "jti": jti
     }
 
-    return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
