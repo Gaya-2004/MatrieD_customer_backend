@@ -22,6 +22,14 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
+@app.on_event("startup")
+def startup_event():
+    try:
+        from .migrations import create_tables
+        create_tables()
+    except Exception as e:
+        logger.warning(f"Auto-migration skipped or failed: {e}")
+
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
