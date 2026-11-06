@@ -44,6 +44,12 @@ def get_current_user(
     # First, try to get token from Authorization header
     if credentials:
         token = credentials.credentials
+    elif "Authorization" in request.headers:
+        auth_header = request.headers["Authorization"]
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header[7:].strip()
+        else:
+            token = auth_header.strip()
     # If not in header, try to get from cookie
     elif "access_token" in request.cookies:
         token = request.cookies["access_token"]
@@ -65,6 +71,12 @@ def get_current_rider(
     # First, try to get token from Authorization header
     if credentials:
         token = credentials.credentials
+    elif "Authorization" in request.headers:
+        auth_header = request.headers["Authorization"]
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header[7:].strip()
+        else:
+            token = auth_header.strip()
     # If not in header, try to get from cookie
     elif "access_token" in request.cookies:
         token = request.cookies["access_token"]
@@ -128,6 +140,12 @@ def get_current_customer(
     # First, try to get token from Authorization header
     if credentials:
         token = credentials.credentials
+    elif "Authorization" in request.headers:
+        auth_header = request.headers["Authorization"]
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header[7:].strip()
+        else:
+            token = auth_header.strip()
     # If not in header, try to get from cookie
     elif "access_token" in request.cookies:
         token = request.cookies["access_token"]

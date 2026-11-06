@@ -29,17 +29,25 @@ def public_restaurants(db: Session = Depends(get_db)):
 
 
 @router.get("/api/v1/restaurants", response_model=list[RestaurantResponse])
-def list_restaurants(user = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_restaurants(
+    restaurant_id: int | None = None,
+    user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    List all restaurants for SUPER_ADMIN.
-
-    HOTEL_ADMIN does not use this endpoint; they are tied to their own restaurant.
+    List all restaurants for SUPER_ADMIN/ADMIN, or assigned restaurant for HOTEL_ADMIN/CASHIER.
     """
-    require_role(user, ["SUPER_ADMIN"])
+    require_role(user, ["SUPER_ADMIN", "ADMIN", "HOTEL_ADMIN", "CASHIER"])
     
     from ..models.user import User
     
-    restaurants = db.query(Restaurant).all()
+    if user.role in ["HOTEL_ADMIN", "CASHIER"]:
+        target_id = user.restaurant_id
+        restaurants = db.query(Restaurant).filter(Restaurant.id == target_id).all() if target_id else []
+    elif restaurant_id is not None:
+        restaurants = db.query(Restaurant).filter(Restaurant.id == restaurant_id).all()
+    else:
+        restaurants = db.query(Restaurant).all()
     result = []
     
     for restaurant in restaurants:

@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 # pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import auth, menu, orders, table, inventory, restaurants, reports, customer, recipes, customer_delivery, delivery_assignments, delivery_tracking, payments, rider, catering, admin_catering, data_management, waiter
+from .routes import auth, menu, orders, table, inventory, restaurants, reports, customer, recipes, customer_delivery, delivery_assignments, delivery_tracking, payments, rider, catering, admin_catering, data_management, waiter, chat
 from .mcp import router as mcp_router
 
 import logging
@@ -21,6 +21,19 @@ import logging
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+@app.on_event("startup")
+def startup_event():
+    try:
+        from .migrations import create_tables
+        create_tables()
+    except Exception as e:
+        logger.warning(f"Auto-migration skipped or failed: {e}")
+    try:
+        from .seed_defaults import seed_defaults
+        seed_defaults()
+    except Exception as e:
+        logger.warning(f"Default seeding check failed: {e}")
 
 @app.get("/health")
 def health_check():
@@ -80,13 +93,14 @@ async def serve_image(filename: str):
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")), name="static")
 
 # CORS Middleware Configuration
-cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "")
-allowed_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
+cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "*")
+allowed_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip() and origin.strip() != "*"]
 
 if allowed_origins:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
+        allow_origin_regex=r"^https?://.*$" if "*" in cors_origins_env else None,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -94,12 +108,11 @@ if allowed_origins:
 else:
     app.add_middleware(
         CORSMiddleware,
-        allow_origin_regex=".*",
+        allow_origin_regex=r"^https?://.*$",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
 
 app.include_router(auth.router)
 
@@ -135,3 +148,4 @@ app.include_router(catering.router)
 app.include_router(admin_catering.router)
 app.include_router(data_management.router)
 app.include_router(waiter.router)
+app.include_router(chat.router)

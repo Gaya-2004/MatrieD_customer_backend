@@ -9,4 +9,7 @@ scratch/
 cloudflared*
 dataudipi.db
 *.db
+*.db-shm
+*.db-wal
+*.db-*
 inspect_schema.py

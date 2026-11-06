@@ -1,4 +1,5 @@
 # Import all models in dependency order
+from .restaurant import Restaurant
 from .user import User
 from .menu import MenuCategory, MenuItem, CateringOrderMenu
 from .table import Table
@@ -21,4 +22,10 @@ from .customer import (
     LoyaltyTransaction,
     CustomerFavorite,
     CustomerOTPChallenge
+)
+from .delivery import (
+    DeliveryPartner,
+    DeliveryAssignment,
+    RiderLocation,
+    DeliveryStatusHistory
 )

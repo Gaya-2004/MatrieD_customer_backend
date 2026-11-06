@@ -27,7 +27,7 @@ def get_reports(
     user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    require_role(user, ["HOTEL_ADMIN", "SUPER_ADMIN"])
+    require_role(user, ["HOTEL_ADMIN", "SUPER_ADMIN", "ADMIN", "CASHIER"])
     restaurant_id = resolve_restaurant_id(user, restaurant_id)
 
     now = datetime.utcnow()
