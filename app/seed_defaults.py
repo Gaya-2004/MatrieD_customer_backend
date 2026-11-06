@@ -60,7 +60,7 @@ def seed_defaults(db: Session = None):
                 "is_approved": True,
             },
             {
-                "email": "waiter_9876543210@dataudipi.internal",
+                "email": "waiter_9876543210@maitred.internal",
                 "name": "Rahul Kumar",
                 "role": "WAITER",
                 "restaurant_id": 1,
@@ -68,7 +68,7 @@ def seed_defaults(db: Session = None):
                 "is_approved": True,
             },
             {
-                "email": "waiter_9876543211@dataudipi.internal",
+                "email": "waiter_9876543211@maitred.internal",
                 "name": "Priya Sharma",
                 "role": "WAITER",
                 "restaurant_id": 1,

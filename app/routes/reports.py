@@ -337,7 +337,7 @@ def get_hourly_report(
         "timeline": timeline,
         "total_sales": total_sales,
         "restaurant": {
-            "name": restaurant.name if restaurant and restaurant.name else "DATAUDIPI HOTEL",
+            "name": restaurant.name if restaurant and restaurant.name else "MaitreD Bistro",
             "address": restaurant.address if restaurant and restaurant.address else "MUGALIVAKKAM, CHENNAI",
             "phone": restaurant.phone if restaurant and restaurant.phone else "9597066563",
             "gstin": restaurant.gst_number if restaurant and restaurant.gst_number else "33ADLPV4810B3ZQ"
@@ -467,7 +467,7 @@ def get_item_wise_report(
         "sgst": 0.00,
         "actual_sales": total_sales,
         "restaurant": {
-            "name": restaurant.name if restaurant and restaurant.name else "DATAUDIPI HOTEL",
+            "name": restaurant.name if restaurant and restaurant.name else "MaitreD Bistro",
             "address": restaurant.address if restaurant and restaurant.address else "MUGALIVAKKAM, CHENNAI",
             "phone": restaurant.phone if restaurant and restaurant.phone else "9597066563",
             "gstin": restaurant.gst_number if restaurant and restaurant.gst_number else "33ADLPV4810B3ZQ"
@@ -816,7 +816,7 @@ def _build_sales_report(
         "order_type_counts": order_type_counts,
         "orders": orders_list_sorted,
         "restaurant": {
-            "name": restaurant.name if restaurant and restaurant.name else "DATAUDIPI HOTEL",
+            "name": restaurant.name if restaurant and restaurant.name else "MaitreD Bistro",
             "address": restaurant.address if restaurant and restaurant.address else "MUGALIVAKKAM, CHENNAI",
             "phone": restaurant.phone if restaurant and restaurant.phone else "9597066563",
             "gstin": restaurant.gst_number if restaurant and restaurant.gst_number else "33ADLPV4810B3ZQ"

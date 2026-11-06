@@ -3089,7 +3089,7 @@ def get_customer_recommendations(
     popular_list = []
     for p in popular_qs:
         if p.menu_item_id in menu_map:
-            popular_list.append(build_item_dict(menu_map[p.menu_item_id], "Popular at Data Udipi"))
+            popular_list.append(build_item_dict(menu_map[p.menu_item_id], "Popular at MaitreD"))
             
     # 4. Recommended Items (Deterministic Scoring)
     # Score = 40% freq, 25% recency, 20% fav, 15% popular

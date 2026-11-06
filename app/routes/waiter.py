@@ -50,7 +50,7 @@ def _normalize_phone(raw: str) -> str:
 
 def _build_synthetic_email(phone: str) -> str:
     """Internal email key for waiter records. Never exposed to the user."""
-    return f"waiter_{phone}@dataudipi.internal"
+    return f"waiter_{phone}@maitred.internal"
 
 
 def _waiter_to_dict(waiter: User, restaurant: Restaurant | None) -> dict:

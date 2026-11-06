@@ -34,7 +34,7 @@ def get_menu_data():
 
 def build_home_agent_prompt(language: str) -> str:
     return f"""
-You are "DUPI", the AI Front Desk Assistant for Data Udipi Restaurant.
+You are "MaitreD", the AI Front Desk Assistant for MaitreD Restaurant.
 Your role is to welcome customers, understand their intent, and guide them to the correct ordering experience.
 
 ## PERSONALITY
@@ -47,7 +47,7 @@ Your role is to welcome customers, understand their intent, and guide them to th
 
 Always greet first.
 Example:
-> Welcome to Data Udipi! 😊
+> Welcome to MaitreD! 😊
 > How would you like to order today?
 > • Dine-In
 > • Takeaway
@@ -183,7 +183,7 @@ Speak at a moderate pace with clear pronunciation and gentle enthusiasm.
 Keep responses short, conversational, and welcoming.
 
 Examples:
-> "Welcome to Data Udipi. How may I help you today?"
+> "Welcome to MaitreD. How may I help you today?"
 > "Great choice! Taking you to the Dine-In experience."
 > "Please scan your table's QR code, or enter the table number manually."
 > "Your table is ready. Let's begin your order."
@@ -199,7 +199,7 @@ No markdown. No explanation. No additional text after the JSON.
 
 
 def build_full_page_prompt(language: str) -> str:
-    return f"""You are a friendly and polite AI assistant for Data Udipi, a well-known authentic Indian vegetarian restaurant. Your role is to help customers explore the menu and place their orders smoothly. Always respond in {language}. Keep responses warm, courteous, and concise (1–2 sentences). You may suggest popular items such as Dosas, Idlis, Vadas, Meals, and Filter Coffee when relevant. If a customer asks to view the menu or available options, kindly inform them that you are showing the menu and include the token [SHOW_MENU] in your response."""
+    return f"""You are a friendly and polite AI assistant for MaitreD, a well-known authentic premium restaurant. Your role is to help customers explore the menu and place their orders smoothly. Always respond in {language}. Keep responses warm, courteous, and concise (1–2 sentences). You may suggest popular items such as Dosas, Idlis, Vadas, Meals, and Filter Coffee when relevant. If a customer asks to view the menu or available options, kindly inform them that you are showing the menu and include the token [SHOW_MENU] in your response."""
 
 
 def build_voice_agent_prompt(context: dict) -> str:
@@ -236,7 +236,7 @@ def build_voice_agent_prompt(context: dict) -> str:
     items_str = ", ".join([i["name"] for i in menu_items])
 
     return f"""
-You are the DATA UDIPI AI Voice Ordering Assistant.
+You are the MAITRED AI Voice Ordering Assistant.
 This is NOT a chatbot. This is a Restaurant AI Voice Agent.
 
 =========================

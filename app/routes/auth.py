@@ -107,7 +107,7 @@ def kds_terminal_login(data: KDSTerminalLoginRequest, response: Response, db: Se
         # Create a dedicated terminal user for this restaurant
         user = User(
             name=f"{restaurant.name} Kitchen",
-            email=f"kds_terminal_{restaurant.id}@udipi.local",
+            email=f"kds_terminal_{restaurant.id}@maitred.local",
             password_hash=hash_password("kds_terminal_secure_key"),
             role="HOTEL_ADMIN",
             restaurant_id=restaurant.id,

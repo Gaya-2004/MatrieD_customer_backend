@@ -34,7 +34,7 @@ def _assert_within_delivery_coverage(db: Session, latitude, longitude):
     if nearest > DELIVERY_RADIUS_KM:
         raise HTTPException(
             status_code=400,
-            detail=f"Data Udipi delivers only within {int(DELIVERY_RADIUS_KM)} km. This location is outside our delivery range.",
+            detail=f"MaitreD delivers only within {int(DELIVERY_RADIUS_KM)} km. This location is outside our delivery range.",
         )
 
 
