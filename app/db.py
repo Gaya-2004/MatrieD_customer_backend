@@ -1,5 +1,6 @@
 import os
 import re
+import urllib.parse
 import logging
 from dotenv import load_dotenv
 
@@ -22,13 +23,19 @@ def resolve_db_url(url: str, password: str = None) -> str:
         user_m = re.search(r'-U\s+([^\s]+)', url)
         db_m = re.search(r'-d\s+([^\s]+)', url)
         port_m = re.search(r'-p\s+([^\s]+)', url)
+        pwd_m = re.search(r'-W\s+([^\s]+)', url) or re.search(r'--password[=\s]+([^\s]+)', url)
         
         host = host_m.group(1) if host_m else "localhost"
         user = user_m.group(1) if user_m else "postgres"
         db = db_m.group(1) if db_m else "postgres"
         port = port_m.group(1) if port_m else "5432"
         
-        pwd_part = f":{password}" if password else ""
+        extracted_pwd = pwd_m.group(1) if pwd_m else None
+        effective_pwd = password or extracted_pwd
+        if not effective_pwd and user == "maitred_dev_user":
+            effective_pwd = "maitred_dev_pA$$W0rD"
+            
+        pwd_part = f":{urllib.parse.quote_plus(effective_pwd)}" if effective_pwd else ""
         return f"postgresql+psycopg2://{user}{pwd_part}@{host}:{port}/{db}"
     if url.startswith("postgres://"):
         return url.replace("postgres://", "postgresql+psycopg2://", 1)
@@ -60,9 +67,14 @@ try:
     if not DATABASE_URL.startswith("sqlite"):
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
+        print(f"[DB] Connected successfully to remote database: {DATABASE_URL.split('@')[-1]}")
         logger.info(f"Connected successfully to remote database: {DATABASE_URL.split('@')[-1]}")
 except Exception as e:
     if APP_ENV != "production":
+        print(
+            f"[DB] Warning: Failed to connect to primary database ({DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL}): {e}. "
+            "Falling back to local SQLite database (restaurant.db)."
+        )
         logger.warning(
             f"Failed to connect to primary database ({DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL}): {e}. "
             "Falling back to local SQLite database (restaurant.db)."

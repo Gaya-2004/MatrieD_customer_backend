@@ -91,6 +91,7 @@ def seed_defaults(db: Session = None):
                     is_approved=u["is_approved"],
                 )
                 db.add(new_user)
+                db.commit()
                 print(f"[SEED] Created default user: {u['email']} ({u['role']})")
 
         # 3. Seed Tables if none exist
@@ -104,6 +105,7 @@ def seed_defaults(db: Session = None):
                     restaurant_id=1,
                 )
                 db.add(t)
+            db.commit()
             print("[SEED] Created 15 default tables for Restaurant 1")
 
         # 4. Seed Default Customer 1 if missing
@@ -116,12 +118,11 @@ def seed_defaults(db: Session = None):
                 phone="+919876543210",
                 email="guest@maitred.com",
                 loyalty_points=50,
-                is_active=True
             )
             db.add(cust)
+            db.commit()
             print("[SEED] Created default customer: Guest User (ID: 1)")
 
-        db.commit()
         print("[SEED] Database seeding check completed.")
     except Exception as e:
         db.rollback()
