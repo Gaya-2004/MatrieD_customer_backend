@@ -1,7 +1,7 @@
 """
 mobile_customer_agent.py
 
-PHASE 2, 14 — Complete Vapi system prompt for Data Udipi Customer Agent
+PHASE 2, 14 — Complete Vapi system prompt for MaitreD Customer Agent
 
 ARCHITECTURE:
     This prompt governs the Vapi LLM (Claude Sonnet / similar).

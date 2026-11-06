@@ -12,7 +12,7 @@ ENVIRONMENT=production
 DATABASE_URL=postgresql://user:password@localhost:5432/dbname
 
 # CORS (Critical for Admin/POS web apps)
-CORS_ALLOWED_ORIGINS=https://admin.dataudipi.com,https://pos.dataudipi.com
+CORS_ALLOWED_ORIGINS=https://admin.maitred.com,https://pos.maitred.com
 
 # Razorpay (Required for Payments)
 RAZORPAY_KEY_ID=your_production_key_id
@@ -47,7 +47,7 @@ alembic upgrade head
 For the Expo React Native app (`mobileapp_frontend`):
 When building for production (e.g., using EAS Build), ensure you set:
 ```env
-EXPO_PUBLIC_API_BASE_URL=https://api.dataudipi.com
+EXPO_PUBLIC_API_BASE_URL=https://api.maitred.com
 ```
 
 The frontend application uses `__DEV__` to enforce the presence of this URL in production and will refuse to fall back to `localhost` or `10.0.2.2` when compiled for production.

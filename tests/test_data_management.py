@@ -79,7 +79,7 @@ class TestDataManagementFeature(unittest.TestCase):
         db = TestSessionLocal()
         try:
             # 1. Restaurant
-            rest = Restaurant(id=1, name="Data Udipi Test Hotel", address="Chennai", phone="9876543210")
+            rest = Restaurant(id=1, name="MaitreD Test Hotel", address="Chennai", phone="9876543210")
             db.add(rest)
             
             # 2. Table
@@ -96,9 +96,9 @@ class TestDataManagementFeature(unittest.TestCase):
             db.add_all([item1, item2])
 
             # 4. Users (Super Admin, Hotel Admin, Cashier)
-            super_admin = User(id=1, restaurant_id=None, name="Super Admin", email="super@dataudipi.com", password_hash="hash", role="SUPER_ADMIN")
-            hotel_admin = User(id=2, restaurant_id=1, name="Hotel Admin", email="hotel@dataudipi.com", password_hash="hash", role="HOTEL_ADMIN")
-            cashier = User(id=3, restaurant_id=1, name="Cashier User", email="cashier@dataudipi.com", password_hash="hash", role="CASHIER")
+            super_admin = User(id=1, restaurant_id=None, name="Super Admin", email="super@maitred.com", password_hash="hash", role="SUPER_ADMIN")
+            hotel_admin = User(id=2, restaurant_id=1, name="Hotel Admin", email="hotel@maitred.com", password_hash="hash", role="HOTEL_ADMIN")
+            cashier = User(id=3, restaurant_id=1, name="Cashier User", email="cashier@maitred.com", password_hash="hash", role="CASHIER")
             db.add_all([super_admin, hotel_admin, cashier])
             
             # 5. Customer

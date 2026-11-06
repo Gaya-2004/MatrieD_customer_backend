@@ -31,7 +31,7 @@ class ProductionSecurityRegressionSuite(unittest.TestCase):
         # Ensure test restaurant exists
         cls.restaurant = cls.db.query(Restaurant).filter(Restaurant.id == 1).first()
         if not cls.restaurant:
-            cls.restaurant = Restaurant(id=1, name="Data Udipi Test Branch")
+            cls.restaurant = Restaurant(id=1, name="MaitreD Test Branch")
             cls.db.add(cls.restaurant)
             cls.db.commit()
             cls.db.refresh(cls.restaurant)
@@ -39,7 +39,7 @@ class ProductionSecurityRegressionSuite(unittest.TestCase):
         # Ensure restaurant 2 exists for cross-restaurant isolation testing
         cls.restaurant_2 = cls.db.query(Restaurant).filter(Restaurant.id == 2).first()
         if not cls.restaurant_2:
-            cls.restaurant_2 = Restaurant(id=2, name="Data Udipi Second Branch")
+            cls.restaurant_2 = Restaurant(id=2, name="MaitreD Second Branch")
             cls.db.add(cls.restaurant_2)
             cls.db.commit()
             cls.db.refresh(cls.restaurant_2)

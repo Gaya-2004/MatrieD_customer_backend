@@ -28,7 +28,7 @@ class OrderIdempotencyAndTimestampSuite(unittest.TestCase):
         # Ensure restaurant exists
         cls.restaurant = cls.db.query(Restaurant).filter(Restaurant.id == 1).first()
         if not cls.restaurant:
-            cls.restaurant = Restaurant(id=1, name="Data Udipi Test Branch")
+            cls.restaurant = Restaurant(id=1, name="MaitreD Test Branch")
             cls.db.add(cls.restaurant)
             cls.db.commit()
             cls.db.refresh(cls.restaurant)
