@@ -63,7 +63,8 @@ def create_tables():
                 ]
                 for col, dtype in new_order_cols:
                     try:
-                        conn.execute(text(f"ALTER TABLE orders ADD COLUMN {col} {dtype};"))
+                        conn.execute(text(f"ALTER TABLE orders ADD COLUMN IF NOT EXISTS {col} {dtype};"))
+                        conn.commit()
                     except Exception as e:
                         pass # column already exists
 
@@ -72,6 +73,7 @@ def create_tables():
                         "CREATE UNIQUE INDEX IF NOT EXISTS ix_orders_idempotency_key "
                         "ON orders (idempotency_key) WHERE idempotency_key IS NOT NULL;"
                     ))
+                    conn.commit()
                 except Exception:
                     pass
                 try:
@@ -79,20 +81,24 @@ def create_tables():
                         "CREATE UNIQUE INDEX IF NOT EXISTS ix_orders_client_order_id "
                         "ON orders (client_order_id) WHERE client_order_id IS NOT NULL;"
                     ))
+                    conn.commit()
                 except Exception:
                     pass
                         
                 try:
-                    conn.execute(text("ALTER TABLE delivery_partners ADD COLUMN total_rides INTEGER DEFAULT 0;"))
+                    conn.execute(text("ALTER TABLE delivery_partners ADD COLUMN IF NOT EXISTS total_rides INTEGER DEFAULT 0;"))
+                    conn.commit()
                 except Exception as e:
                     pass
                     
                 try:
-                    conn.execute(text("ALTER TABLE restaurants ADD COLUMN latitude FLOAT;"))
+                    conn.execute(text("ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS latitude FLOAT;"))
+                    conn.commit()
                 except Exception:
                     pass
                 try:
-                    conn.execute(text("ALTER TABLE restaurants ADD COLUMN longitude FLOAT;"))
+                    conn.execute(text("ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS longitude FLOAT;"))
+                    conn.commit()
                 except Exception:
                     pass
                 

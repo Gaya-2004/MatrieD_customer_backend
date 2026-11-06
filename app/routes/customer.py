@@ -553,6 +553,7 @@ class CustomerOrderPayload(BaseModel):
     payment_method: str = "UPI"
     phone: str = ""
     customer_phone: Optional[str] = None
+    customer_name: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -942,36 +943,39 @@ def place_order(
             
         payment_status = "Paid" if is_paid else "Pending"
 
-        # Build complete delivery address snapshot securely from DB
+        # Build complete delivery address snapshot
         delivery_snapshot = None
-        valid_delivery_address_id = None
+        valid_delivery_address_id = payload.delivery_address_id if payload.delivery_address_id else None
         if is_delivery:
-            if not payload.delivery_address_id:
-                raise HTTPException(status_code=400, detail="Delivery address ID is required for delivery orders")
-                
-            addr_db = db.query(CustomerAddress).filter(CustomerAddress.id == payload.delivery_address_id).first()
-            if not addr_db:
-                raise HTTPException(status_code=404, detail="Customer address not found")
-                
-            # Verify ownership if possible (assuming payload has customer identity or it's checked earlier)
-            # We trust the db address completely
             import json
+            raw_full_addr = payload.delivery_address or "Customer Delivery Location"
+            lat = payload.customer_latitude or 12.9716
+            lon = payload.customer_longitude or 77.5946
+            contact_p = cust_phone or (payload.phone.strip() if payload.phone else "9876543210")
+            contact_n = payload.customer_name or "Customer"
+
+            if payload.delivery_address_snapshot:
+                if isinstance(payload.delivery_address_snapshot, dict):
+                    snap = payload.delivery_address_snapshot
+                else:
+                    try:
+                        snap = json.loads(payload.delivery_address_snapshot)
+                    except Exception:
+                        snap = {}
+                raw_full_addr = snap.get("full_address") or raw_full_addr
+                lat = snap.get("latitude") or lat
+                lon = snap.get("longitude") or lon
+                contact_p = snap.get("contact_phone") or contact_p
+                contact_n = snap.get("contact_name") or contact_n
+
             delivery_snapshot = json.dumps({
-                "full_address": addr_db.full_address,
-                "latitude": addr_db.latitude,
-                "longitude": addr_db.longitude,
-                "contact_name": addr_db.contact_name,
-                "contact_phone": addr_db.contact_phone,
-                "delivery_instructions": addr_db.delivery_instructions or payload.delivery_instructions
+                "full_address": raw_full_addr,
+                "latitude": lat,
+                "longitude": lon,
+                "contact_name": contact_n,
+                "contact_phone": contact_p,
+                "delivery_instructions": payload.delivery_instructions
             })
-            
-            try:
-                from ..models.order import DeliveryAddress as DelivAddrModel
-                da = db.query(DelivAddrModel).filter(DelivAddrModel.id == payload.delivery_address_id).first()
-                if da:
-                    valid_delivery_address_id = da.id
-            except Exception:
-                valid_delivery_address_id = None
 
         clean_payment_method = "Cash" if is_delivery_cash else (payload.payment_method or "UPI")
 
