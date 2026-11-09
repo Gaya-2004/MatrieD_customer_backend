@@ -91,6 +91,9 @@ def update_delivery_status(db: Session, assignment_id: int, new_status: str, not
         if new_status in ["DELIVERED", "REJECTED", "FAILED", "CANCELLED"] and rider:
             if new_status == "DELIVERED" and current_status != "DELIVERED":
                 rider.total_rides = (rider.total_rides or 0) + 1
+                rider.take_home_earnings = round(float(rider.take_home_earnings or 0.0) + 45.0, 2)
+                rider.esi_pf_amount = round(float(rider.esi_pf_amount or 0.0) + 12.0, 2)
+                rider.platform_fee_amount = round(float(rider.platform_fee_amount or 0.0) + 3.0, 2)
                 
             # Only become available if there are no other active assignments
             active_count = db.query(DeliveryAssignment).filter(

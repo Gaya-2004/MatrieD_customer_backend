@@ -8,7 +8,7 @@ from datetime import datetime
 class DeliveryPartner(Base):
     __tablename__ = "delivery_partners"
 
-    id = Column(BigInteger, primary_key=True, index=True)
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, index=True, autoincrement=True)
     name = Column(String(150))
     phone = Column(String(20), unique=True)
     email = Column(String(150), nullable=True)
@@ -26,6 +26,9 @@ class DeliveryPartner(Base):
     is_available = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     total_rides = Column(Integer, default=0)
+    take_home_earnings = Column(Float, default=0.0)
+    esi_pf_amount = Column(Float, default=0.0)
+    platform_fee_amount = Column(Float, default=0.0)
     current_latitude = Column(Float, nullable=True)
     current_longitude = Column(Float, nullable=True)
     last_location_at = Column(DateTime, nullable=True)
@@ -36,7 +39,7 @@ class DeliveryPartner(Base):
 class DeliveryAssignment(Base):
     __tablename__ = "delivery_assignments"
 
-    id = Column(BigInteger, primary_key=True, index=True)
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, index=True, autoincrement=True)
     order_id = Column(BigInteger, ForeignKey("orders.id"), index=True)
     rider_id = Column(BigInteger, ForeignKey("delivery_partners.id"), index=True, nullable=True)
     status = Column(String(40), index=True)
@@ -57,7 +60,7 @@ class DeliveryAssignment(Base):
 class RiderLocation(Base):
     __tablename__ = "rider_locations"
 
-    id = Column(BigInteger, primary_key=True, index=True)
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, index=True, autoincrement=True)
     rider_id = Column(BigInteger, ForeignKey("delivery_partners.id"), index=True)
     order_id = Column(BigInteger, ForeignKey("orders.id"), index=True, nullable=True)
     latitude = Column(Float)
@@ -70,7 +73,7 @@ class RiderLocation(Base):
 class DeliveryStatusHistory(Base):
     __tablename__ = "delivery_status_history"
 
-    id = Column(BigInteger, primary_key=True, index=True)
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, index=True, autoincrement=True)
     order_id = Column(BigInteger, ForeignKey("orders.id"), index=True)
     delivery_assignment_id = Column(BigInteger, ForeignKey("delivery_assignments.id"), index=True, nullable=True)
     rider_id = Column(BigInteger, ForeignKey("delivery_partners.id"), index=True, nullable=True)
@@ -83,7 +86,7 @@ class DeliveryStatusHistory(Base):
 class RiderDocument(Base):
     __tablename__ = "rider_documents"
 
-    id = Column(BigInteger, primary_key=True, index=True)
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, index=True, autoincrement=True)
     rider_id = Column(BigInteger, ForeignKey("delivery_partners.id"), index=True)
     document_type = Column(String(50))
     document_number = Column(String(100), nullable=True)
@@ -97,7 +100,7 @@ class RiderDocument(Base):
 class RiderBankDetail(Base):
     __tablename__ = "rider_bank_details"
 
-    id = Column(BigInteger, primary_key=True, index=True)
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, index=True, autoincrement=True)
     rider_id = Column(BigInteger, ForeignKey("delivery_partners.id"), index=True, unique=True)
     account_name = Column(String(150), nullable=True)
     account_number = Column(String(50), nullable=True)
@@ -109,7 +112,7 @@ class RiderBankDetail(Base):
 class RiderSession(Base):
     __tablename__ = "rider_sessions"
 
-    id = Column(BigInteger, primary_key=True, index=True)
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, index=True, autoincrement=True)
     rider_id = Column(BigInteger, ForeignKey("delivery_partners.id"), index=True, nullable=False)
     jti = Column(String(64), unique=True, index=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
