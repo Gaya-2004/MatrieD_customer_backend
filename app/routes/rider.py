@@ -306,13 +306,15 @@ def format_assignment_data(assignment: DeliveryAssignment, order: Order, restaur
         for oi in order_items:
             item_name = oi.menu_item.name if oi.menu_item else f"Item #{oi.menu_item_id}"
             item_price = oi.price if oi.price is not None else (oi.menu_item.price if oi.menu_item else 0.0)
+            food_type = getattr(oi.menu_item, "food_type", None) if oi.menu_item else None
             items.append({
                 "id": oi.id,
                 "menu_item_id": oi.menu_item_id,
                 "name": item_name,
                 "quantity": oi.quantity or 1,
                 "price": float(item_price or 0.0),
-                "total_price": round(float(item_price or 0.0) * (oi.quantity or 1), 2)
+                "total_price": round(float(item_price or 0.0) * (oi.quantity or 1), 2),
+                "food_type": food_type
             })
 
     # Parse delivery_address snapshot
