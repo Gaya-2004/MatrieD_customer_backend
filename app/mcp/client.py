@@ -119,7 +119,8 @@ SUPPORTED_AUDIO_MIME = {
 }
 
 if not GEMINI_API_KEY:
-    raise RuntimeError("Environment variable GEMINI_API_KEY is required for Gemini access.")
+    import logging
+    logging.getLogger(__name__).warning("GEMINI_API_KEY is not set. Gemini AI features will be disabled.")
 
 
 class GeminiClient:
@@ -132,6 +133,8 @@ class GeminiClient:
     _shared_client: httpx.AsyncClient | None = None
 
     def __init__(self, mode: str = "chat", model: str | None = None) -> None:
+        if not GEMINI_API_KEY:
+            raise RuntimeError("Environment variable GEMINI_API_KEY is required for Gemini access.")
         self.base_url = GEMINI_API_BASE
         resolved_mode = (mode or "chat").strip().lower()
         selected_model = model or _MODELS_BY_MODE.get(resolved_mode) or GEMINI_MODEL

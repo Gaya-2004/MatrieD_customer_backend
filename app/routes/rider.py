@@ -1,5 +1,12 @@
 # pyrefly: ignore [missing-import]
-from fastapi import APIRouter, Depends, HTTPException
+import logging
+import os
+import base64
+import uuid
+import shutil
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+
+logger = logging.getLogger(__name__)
 # pyrefly: ignore [missing-import]
 from pydantic import BaseModel
 # pyrefly: ignore [missing-import]
@@ -80,31 +87,42 @@ def rider_register(payload: RiderRegisterPayload, db: Session = Depends(get_db))
     ).first()
 
     if not existing:
-        raise HTTPException(
-            status_code=403,
-            detail="Phone number not registered. Please contact your administrator to onboard as a delivery partner."
+        # Create new delivery partner account
+        rider = DeliveryPartner(
+            name=name,
+            phone=clean_phone,
+            password_hash=hash_password(pwd),
+            is_active=True,
+            is_online=True,
+            is_available=True,
+            rating=5.0,
+            total_rides=0,
+            total_ratings=0
         )
+        db.add(rider)
+        db.commit()
+        db.refresh(rider)
+    else:
+        if existing.password_hash:
+            raise HTTPException(
+                status_code=400,
+                detail="Account already registered with this phone number. Please sign in with your password."
+            )
 
-    if existing.password_hash:
-        raise HTTPException(
-            status_code=400,
-            detail="Account already registered with this phone number. Please sign in with your password."
-        )
+        if not existing.is_active:
+            raise HTTPException(
+                status_code=401,
+                detail="Account is disabled. Please contact administrator."
+            )
 
-    if not existing.is_active:
-        raise HTTPException(
-            status_code=401,
-            detail="Account is disabled. Please contact administrator."
-        )
-
-    # Authorized rider completing registration / setting initial password
-    existing.name = name
-    existing.password_hash = hash_password(pwd)
-    existing.is_active = True
-    existing.is_online = True
-    existing.is_available = True
-    db.commit()
-    rider = existing
+        # Authorized rider completing registration / setting initial password
+        existing.name = name
+        existing.password_hash = hash_password(pwd)
+        existing.is_active = True
+        existing.is_online = True
+        existing.is_available = True
+        db.commit()
+        rider = existing
 
     token_info = create_rider_token(rider.id)
     new_session = RiderSession(
@@ -548,12 +566,24 @@ def get_rider_stats(current_rider=Depends(get_current_rider), db: Session = Depe
             week_earnings += float(getattr(order, "delivery_fee", 0.0) or 0.0)
             week_earnings += float(getattr(order, "tip_amount", 0.0) or 0.0)
 
+    total_delivered = db.query(DeliveryAssignment).filter(
+        DeliveryAssignment.rider_id == rider_id,
+        DeliveryAssignment.status == "DELIVERED"
+    ).count()
+
+    take_home = float(getattr(current_rider, "take_home_earnings", 0.0) or (total_delivered * 45.0))
+    esi_pf = float(getattr(current_rider, "esi_pf_amount", 0.0) or (total_delivered * 12.0))
+    platform_fee = float(getattr(current_rider, "platform_fee_amount", 0.0) or (total_delivered * 3.0))
+
     return {
-        "today_earnings": round(today_earnings, 2),
+        "today_earnings": round(len(today_assignments) * 45.0, 2),
         "deliveries_today": len(today_assignments),
-        "total_rides": total_rides,
+        "total_rides": total_rides or total_delivered,
         "rating": rating,
-        "this_week_earnings": round(week_earnings, 2),
+        "this_week_earnings": round(len(week_assignments) * 45.0, 2),
+        "take_home_charge": round(take_home, 2),
+        "esi_pf_charge": round(esi_pf, 2),
+        "platform_fee_charge": round(platform_fee, 2),
     }
 
 
@@ -719,10 +749,37 @@ def patch_availability(rider_id: int, payload: AvailabilityPayload, current_ride
 # ── Authenticated Rider Endpoints (/me) ───────────────────────────────────
 
 @router.get("/api/v1/riders/me")
+@router.get("/api/v1/rider/me")
 def get_rider_me(current_rider=Depends(get_current_rider), db: Session = Depends(get_db)):
     rider = db.query(DeliveryPartner).filter(DeliveryPartner.id == current_rider.id).first()
     if not rider:
         raise HTTPException(status_code=404, detail="Rider not found")
+    
+    # Check vehicle completeness
+    has_vehicle = bool(rider.vehicle_type and (rider.vehicle_type.lower() == 'bicycle' or (rider.vehicle_number and len(rider.vehicle_number.strip()) >= 3)))
+    
+    # Check bank completeness
+    bank = db.query(RiderBankDetail).filter(RiderBankDetail.rider_id == rider.id).first()
+    has_bank = bool(bank and bank.account_number and bank.ifsc_code)
+    
+    # Check documents completeness
+    docs = db.query(RiderDocument).filter(RiderDocument.rider_id == rider.id, RiderDocument.document_url.isnot(None)).all()
+    doc_types = {d.document_type for d in docs if d.document_url}
+    has_license = "license" in doc_types
+    has_id = bool("aadhaar_front" in doc_types or "pan_card" in doc_types)
+    has_docs = has_license and has_id
+    
+    completed_count = (1 if has_vehicle else 0) + (1 if has_bank else 0) + (1 if has_docs else 0)
+    if completed_count == 3:
+        completion_percentage = 100
+    elif completed_count == 2:
+        completion_percentage = 67
+    elif completed_count == 1:
+        completion_percentage = 33
+    else:
+        completion_percentage = 0
+        
+    is_profile_completed = (completion_percentage == 100)
     
     return {
         "id": rider.id,
@@ -732,6 +789,14 @@ def get_rider_me(current_rider=Depends(get_current_rider), db: Session = Depends
         "profile_image": rider.profile_image,
         "vehicle_type": rider.vehicle_type,
         "vehicle_number": rider.vehicle_number,
+        "vehicle_ownership": rider.vehicle_ownership,
+        "vehicle_brand": rider.vehicle_brand,
+        "vehicle_model": rider.vehicle_model,
+        "fuel_type": rider.fuel_type,
+        "vehicle_color": rider.vehicle_color,
+        "take_home_earnings": round(float(getattr(rider, "take_home_earnings", 0.0) or 0.0), 2),
+        "esi_pf_amount": round(float(getattr(rider, "esi_pf_amount", 0.0) or 0.0), 2),
+        "platform_fee_amount": round(float(getattr(rider, "platform_fee_amount", 0.0) or 0.0), 2),
         "rating": round(rider.rating or 0.0, 1),
         "total_ratings": rider.total_ratings or 0,
         "total_rides": rider.total_rides or 0,
@@ -741,6 +806,13 @@ def get_rider_me(current_rider=Depends(get_current_rider), db: Session = Depends
         "current_latitude": rider.current_latitude,
         "current_longitude": rider.current_longitude,
         "last_location_at": rider.last_location_at,
+        "is_profile_completed": is_profile_completed,
+        "profile_completion_percentage": completion_percentage,
+        "completion_details": {
+            "vehicle_info": has_vehicle,
+            "bank_details": has_bank,
+            "documents": has_docs,
+        }
     }
 
 class RiderUpdatePayload(BaseModel):
@@ -767,6 +839,7 @@ def update_rider_me(payload: RiderUpdatePayload, current_rider=Depends(get_curre
 
 
 @router.get("/api/v1/riders/me/vehicle")
+@router.get("/api/v1/rider/vehicle")
 def get_rider_vehicle(current_rider=Depends(get_current_rider), db: Session = Depends(get_db)):
     rider = db.query(DeliveryPartner).filter(DeliveryPartner.id == current_rider.id).first()
     if not rider:
@@ -791,6 +864,9 @@ class VehicleUpdatePayload(BaseModel):
     vehicle_color: Optional[str] = None
 
 @router.patch("/api/v1/riders/me/vehicle")
+@router.put("/api/v1/riders/me/vehicle")
+@router.patch("/api/v1/rider/vehicle")
+@router.put("/api/v1/rider/vehicle")
 def update_rider_vehicle(payload: VehicleUpdatePayload, current_rider=Depends(get_current_rider), db: Session = Depends(get_db)):
     rider = db.query(DeliveryPartner).filter(DeliveryPartner.id == current_rider.id).first()
     if not rider:
@@ -801,7 +877,7 @@ def update_rider_vehicle(payload: VehicleUpdatePayload, current_rider=Depends(ge
     if payload.vehicle_ownership is not None:
         rider.vehicle_ownership = payload.vehicle_ownership
     if payload.vehicle_number is not None:
-        rider.vehicle_number = payload.vehicle_number
+        rider.vehicle_number = payload.vehicle_number.strip().upper() if payload.vehicle_number else None
     if payload.vehicle_brand is not None:
         rider.vehicle_brand = payload.vehicle_brand
     if payload.vehicle_model is not None:
@@ -812,6 +888,7 @@ def update_rider_vehicle(payload: VehicleUpdatePayload, current_rider=Depends(ge
         rider.vehicle_color = payload.vehicle_color
         
     db.commit()
+    db.refresh(rider)
     return {
         "vehicle_type": rider.vehicle_type,
         "vehicle_ownership": rider.vehicle_ownership,
@@ -822,6 +899,38 @@ def update_rider_vehicle(payload: VehicleUpdatePayload, current_rider=Depends(ge
         "vehicle_color": rider.vehicle_color,
     }
 
+def _process_document_image(rider_id: int, doc_type: str, raw_val: str) -> str:
+    """Save base64 encoded document images to persistent static storage and return the URL."""
+    if not raw_val or not isinstance(raw_val, str):
+        return raw_val
+    if raw_val.startswith("http://") or raw_val.startswith("https://") or raw_val.startswith("/static/"):
+        return raw_val
+        
+    data_to_decode = raw_val
+    ext = "jpg"
+    if "base64," in raw_val:
+        header, data_to_decode = raw_val.split("base64,", 1)
+        if "png" in header:
+            ext = "png"
+        elif "webp" in header:
+            ext = "webp"
+            
+    try:
+        image_bytes = base64.b64decode(data_to_decode)
+        if len(image_bytes) > 20:
+            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            static_doc_dir = os.path.join(backend_dir, "static", "rider_documents")
+            os.makedirs(static_doc_dir, exist_ok=True)
+            filename = f"rider_{rider_id}_{doc_type}_{uuid.uuid4().hex[:6]}.{ext}"
+            filepath = os.path.join(static_doc_dir, filename)
+            with open(filepath, "wb") as f:
+                f.write(image_bytes)
+            return f"/static/rider_documents/{filename}"
+    except Exception as e:
+        logger.error(f"Error saving base64 document {doc_type}: {e}")
+        
+    return raw_val
+
 class RiderDocumentPayload(BaseModel):
     aadhaar_front: Optional[str] = None
     aadhaar_back: Optional[str] = None
@@ -829,50 +938,69 @@ class RiderDocumentPayload(BaseModel):
     license: Optional[str] = None
 
 @router.get("/api/v1/riders/me/documents")
-def get_rider_documents(current_rider=Depends(get_current_rider), db: Session = Depends(get_db)):
+@router.get("/api/v1/rider/documents")
+def get_rider_documents(request: Request, current_rider=Depends(get_current_rider), db: Session = Depends(get_db)):
     docs = db.query(RiderDocument).filter(RiderDocument.rider_id == current_rider.id).all()
     result = {
         "aadhaar_front": None,
         "aadhaar_back": None,
         "pan_card": None,
         "license": None,
-        "is_verified": False
+        "is_verified": False,
+        "uploaded_count": 0,
+        "is_complete": False
     }
     
     verified_count = 0
+    uploaded_count = 0
+    base_url = str(request.base_url).rstrip("/")
+    
     for doc in docs:
-        if doc.document_type == "aadhaar_front":
-            result["aadhaar_front"] = doc.document_url
-        elif doc.document_type == "aadhaar_back":
-            result["aadhaar_back"] = doc.document_url
-        elif doc.document_type == "pan_card":
-            result["pan_card"] = doc.document_url
-        elif doc.document_type == "license":
-            result["license"] = doc.document_url
+        url = doc.document_url
+        if url and url.startswith("/static/"):
+            url = f"{base_url}{url}"
             
+        if doc.document_type == "aadhaar_front":
+            result["aadhaar_front"] = url
+        elif doc.document_type == "aadhaar_back":
+            result["aadhaar_back"] = url
+        elif doc.document_type == "pan_card":
+            result["pan_card"] = url
+        elif doc.document_type == "license":
+            result["license"] = url
+            
+        if doc.document_url:
+            uploaded_count += 1
         if doc.verification_status == "VERIFIED":
             verified_count += 1
             
-    # Assuming verified if all 4 docs are verified
-    if verified_count >= 4:
-        result["is_verified"] = True
+    has_license = bool(result["license"])
+    has_id = bool(result["aadhaar_front"] or result["pan_card"])
+    result["uploaded_count"] = uploaded_count
+    result["is_complete"] = has_license and has_id
+    result["is_verified"] = verified_count >= 2
         
     return result
 
 @router.patch("/api/v1/riders/me/documents")
-def update_rider_documents(payload: RiderDocumentPayload, current_rider=Depends(get_current_rider), db: Session = Depends(get_db)):
+@router.put("/api/v1/riders/me/documents")
+@router.post("/api/v1/riders/me/documents")
+@router.patch("/api/v1/rider/documents")
+@router.put("/api/v1/rider/documents")
+def update_rider_documents(request: Request, payload: RiderDocumentPayload, current_rider=Depends(get_current_rider), db: Session = Depends(get_db)):
     docs = db.query(RiderDocument).filter(RiderDocument.rider_id == current_rider.id).all()
     doc_map = {doc.document_type: doc for doc in docs}
     
     def update_or_create(doc_type, url):
+        processed_url = _process_document_image(current_rider.id, doc_type, url)
         if doc_type in doc_map:
-            doc_map[doc_type].document_url = url
+            doc_map[doc_type].document_url = processed_url
             doc_map[doc_type].verification_status = "PENDING"
         else:
             new_doc = RiderDocument(
                 rider_id=current_rider.id,
                 document_type=doc_type,
-                document_url=url,
+                document_url=processed_url,
                 verification_status="PENDING"
             )
             db.add(new_doc)
@@ -888,7 +1016,53 @@ def update_rider_documents(payload: RiderDocumentPayload, current_rider=Depends(
         
     db.commit()
     
-    return get_rider_documents(current_rider, db)
+    return get_rider_documents(request, current_rider, db)
+
+@router.post("/api/v1/riders/me/documents/{document_type}/upload")
+@router.post("/api/v1/rider/documents/{document_type}/upload")
+async def upload_rider_document_file(
+    document_type: str,
+    file: UploadFile = File(...),
+    current_rider=Depends(get_current_rider),
+    db: Session = Depends(get_db)
+):
+    if document_type not in ["aadhaar_front", "aadhaar_back", "pan_card", "license"]:
+        raise HTTPException(status_code=400, detail="Invalid document type")
+        
+    ext = (file.filename or "doc.jpg").rsplit(".", 1)[-1].lower()
+    if ext not in ("jpg", "jpeg", "png", "webp", "pdf"):
+        ext = "jpg"
+        
+    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    static_doc_dir = os.path.join(backend_dir, "static", "rider_documents")
+    os.makedirs(static_doc_dir, exist_ok=True)
+    filename = f"rider_{current_rider.id}_{document_type}_{uuid.uuid4().hex[:6]}.{ext}"
+    filepath = os.path.join(static_doc_dir, filename)
+    
+    with open(filepath, "wb") as buf:
+        shutil.copyfileobj(file.file, buf)
+        
+    url = f"/static/rider_documents/{filename}"
+    
+    doc = db.query(RiderDocument).filter(
+        RiderDocument.rider_id == current_rider.id,
+        RiderDocument.document_type == document_type
+    ).first()
+    
+    if doc:
+        doc.document_url = url
+        doc.verification_status = "PENDING"
+    else:
+        doc = RiderDocument(
+            rider_id=current_rider.id,
+            document_type=document_type,
+            document_url=url,
+            verification_status="PENDING"
+        )
+        db.add(doc)
+        
+    db.commit()
+    return {"document_type": document_type, "document_url": url, "verification_status": "PENDING"}
 
 class RiderBankDetailPayload(BaseModel):
     account_name: Optional[str] = None
@@ -897,6 +1071,7 @@ class RiderBankDetailPayload(BaseModel):
     bank_name: Optional[str] = None
 
 @router.get("/api/v1/riders/me/bank-details")
+@router.get("/api/v1/rider/bank-details")
 def get_rider_bank_details(current_rider=Depends(get_current_rider), db: Session = Depends(get_db)):
     bank = db.query(RiderBankDetail).filter(RiderBankDetail.rider_id == current_rider.id).first()
     if not bank:
@@ -909,6 +1084,10 @@ def get_rider_bank_details(current_rider=Depends(get_current_rider), db: Session
     }
 
 @router.patch("/api/v1/riders/me/bank-details")
+@router.put("/api/v1/riders/me/bank-details")
+@router.post("/api/v1/riders/me/bank-details")
+@router.patch("/api/v1/rider/bank-details")
+@router.put("/api/v1/rider/bank-details")
 def update_rider_bank_details(payload: RiderBankDetailPayload, current_rider=Depends(get_current_rider), db: Session = Depends(get_db)):
     bank = db.query(RiderBankDetail).filter(RiderBankDetail.rider_id == current_rider.id).first()
     if not bank:
@@ -916,13 +1095,13 @@ def update_rider_bank_details(payload: RiderBankDetailPayload, current_rider=Dep
         db.add(bank)
         
     if payload.account_name is not None:
-        bank.account_name = payload.account_name
+        bank.account_name = payload.account_name.strip() if payload.account_name else None
     if payload.account_number is not None:
-        bank.account_number = payload.account_number
+        bank.account_number = payload.account_number.strip() if payload.account_number else None
     if payload.ifsc_code is not None:
-        bank.ifsc_code = payload.ifsc_code
+        bank.ifsc_code = payload.ifsc_code.strip().upper() if payload.ifsc_code else None
     if payload.bank_name is not None:
-        bank.bank_name = payload.bank_name
+        bank.bank_name = payload.bank_name.strip() if payload.bank_name else None
         
     db.commit()
     db.refresh(bank)
