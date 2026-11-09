@@ -24,16 +24,26 @@ app = FastAPI()
 
 @app.on_event("startup")
 def startup_event():
-    try:
-        from .migrations import create_tables
-        create_tables()
-    except Exception as e:
-        logger.warning(f"Auto-migration skipped or failed: {e}")
-    try:
-        from .seed_defaults import seed_defaults
-        seed_defaults()
-    except Exception as e:
-        logger.warning(f"Default seeding check failed: {e}")
+    skip_migrations = os.getenv("SKIP_AUTO_MIGRATION", "false").lower() in ("true", "1", "yes")
+    skip_seed = os.getenv("SKIP_DEFAULT_SEEDING", "false").lower() in ("true", "1", "yes")
+
+    if not skip_migrations:
+        try:
+            from .migrations import create_tables
+            create_tables()
+        except Exception as e:
+            logger.warning(f"Auto-migration skipped or failed: {e}")
+    else:
+        logger.info("Auto-migration skipped to avoid altering database.")
+
+    if not skip_seed:
+        try:
+            from .seed_defaults import seed_defaults
+            seed_defaults()
+        except Exception as e:
+            logger.warning(f"Default seeding check failed: {e}")
+    else:
+        logger.info("Default seeding skipped to avoid modifying database.")
 
 @app.get("/health")
 def health_check():
