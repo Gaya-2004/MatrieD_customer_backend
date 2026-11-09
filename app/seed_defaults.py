@@ -124,9 +124,7 @@ def seed_defaults(db: Session = None):
             db.add(cust)
             db.commit()
             print("[SEED] Created default customer: Guest User (ID: 1)")
-
-<<<<<<< HEAD
-=======
+            
         # 5. Seed Default Delivery Partner if missing
         from .models.delivery import DeliveryPartner
         rider = db.query(DeliveryPartner).filter(DeliveryPartner.phone == "9876543210").first()
@@ -155,7 +153,6 @@ def seed_defaults(db: Session = None):
             print("[SEED] Created default rider: Ramesh Kumar (9876543210)")
 
         db.commit()
->>>>>>> bcf5baf (feat(rider): add documents, bank details, delivery status earnings, and model improvements)
         print("[SEED] Database seeding check completed.")
     except Exception as e:
         db.rollback()
