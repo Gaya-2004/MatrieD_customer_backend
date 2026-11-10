@@ -123,7 +123,7 @@ def create_item(
     user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    require_role(user, ["HOTEL_ADMIN", "SUPER_ADMIN", "ADMIN"])
+    require_role(user, ["HOTEL_ADMIN", "SUPER_ADMIN"])
 
     item_data = data.model_dump()
     if user.role == "HOTEL_ADMIN":
@@ -134,9 +134,9 @@ def create_item(
             )
         item_data["restaurant_id"] = user.restaurant_id
     else:
-        # SUPER_ADMIN / ADMIN has full edit access: default to 1 if not passed
+        # SUPER_ADMIN may write to any hotel but must say which one explicitly
         if not item_data.get("restaurant_id"):
-            item_data["restaurant_id"] = 1
+            raise HTTPException(status_code=400, detail="restaurant_id is required for SUPER_ADMIN")
 
     item = MenuItem(**item_data)
     db.add(item)
@@ -165,7 +165,7 @@ def update_item(
     - SUPER_ADMIN: Can update items from any restaurant
     - HOTEL_ADMIN: Can only update items from their restaurant
     """
-    require_role(user, ["HOTEL_ADMIN", "SUPER_ADMIN", "ADMIN"])
+    require_role(user, ["HOTEL_ADMIN", "SUPER_ADMIN"])
 
     item = db.query(MenuItem).filter(MenuItem.id == item_id).first()
     if not item:
@@ -296,7 +296,7 @@ def create_catering_menu(
     user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    require_role(user, ["HOTEL_ADMIN", "SUPER_ADMIN", "ADMIN"])
+    require_role(user, ["HOTEL_ADMIN", "SUPER_ADMIN"])
     
     item_data = data.model_dump()
     if user.role == "HOTEL_ADMIN":
@@ -306,9 +306,6 @@ def create_catering_menu(
                 detail=f"Hotel admin can only create items for restaurant {user.restaurant_id}"
             )
         item_data["restaurant_id"] = user.restaurant_id
-    elif user.role in ["SUPER_ADMIN", "ADMIN"]:
-        if not item_data.get("restaurant_id"):
-            item_data["restaurant_id"] = 1
 
     valid_cols = {c.name for c in CateringOrderMenu.__table__.columns}
     clean_data = {k: v for k, v in item_data.items() if k in valid_cols}

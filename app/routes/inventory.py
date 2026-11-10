@@ -128,9 +128,9 @@ def create_inventory(
     """
     Create a new inventory item
     """
-    require_role(user, ["HOTEL_ADMIN", "SUPER_ADMIN", "ADMIN"])
+    require_role(user, ["HOTEL_ADMIN", "SUPER_ADMIN"])
 
-    restaurant_id = resolve_restaurant_id(user, data.get("restaurant_id")) or 1
+    restaurant_id = resolve_restaurant_id(user, data.get("restaurant_id"))
 
     if not data.get("name"):
         raise HTTPException(status_code=400, detail="Name is required")

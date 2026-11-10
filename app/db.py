@@ -86,19 +86,12 @@ try:
         print(f"[DB] Connected successfully to remote database: {DATABASE_URL.split('@')[-1]}")
         logger.info(f"Connected successfully to remote database: {DATABASE_URL.split('@')[-1]}")
 except Exception as e:
-    if APP_ENV != "production":
-        print(
-            f"[DB] Warning: Failed to connect to primary database ({DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL}): {e}. "
-            "Falling back to local SQLite database (restaurant.db)."
-        )
-        logger.warning(
-            f"Failed to connect to primary database ({DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL}): {e}. "
-            "Falling back to local SQLite database (restaurant.db)."
-        )
-        DATABASE_URL = "sqlite:///restaurant.db"
-        engine = init_engine(DATABASE_URL)
-    else:
-        raise
+    # The shared RDS database is the only supported backend store. Never silently
+    # fall back to a local SQLite file, which would split data between environments.
+    logger.error(
+        f"Failed to connect to database ({DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL}): {e}"
+    )
+    raise
 
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()

@@ -24,7 +24,8 @@ class MenuItem(Base):
     category_id = Column(Integer, ForeignKey("menu_categories.id"), index=True)
     item_code = Column(String, index=True, nullable=True)
     ac_type = Column(String, default="Both")
-    food_type = Column(String, nullable=True, default="Veg")
+    # DB constraint chk_menu_items_food_type only allows NULL, 'VEG' or 'NON_VEG'
+    food_type = Column(String, nullable=True, default="VEG")
     name = Column(String, index=True)
     description = Column(Text, nullable=True)
     price = Column(Float)

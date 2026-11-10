@@ -103,54 +103,52 @@ async def serve_image(filename: str):
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")), name="static")
 
 # CORS Middleware Configuration
-cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "*")
-allowed_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip() and origin.strip() != "*"]
+# Explicit allowlist only (comma-separated CORS_ALLOWED_ORIGINS). A bare "*" is ignored because
+# it cannot be combined with credentials safely. In non-production, local dev origins
+# (localhost / 127.0.0.1 / private LAN IPs on any port) are additionally allowed so the admin
+# web app and the mobile web app can both reach this one backend without extra setup.
+import re as _re
 
-if allowed_origins:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=allowed_origins,
-        allow_origin_regex=r"^https?://.*$" if "*" in cors_origins_env else None,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-else:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origin_regex=r"^https?://.*$",
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "")
+allowed_origins = [o.strip().rstrip("/") for o in cors_origins_env.split(",") if o.strip() and o.strip() != "*"]
+if "*" in cors_origins_env:
+    logger.warning("CORS_ALLOWED_ORIGINS contains '*' which is ignored; list explicit origins instead.")
+
+_is_production = os.getenv("ENVIRONMENT", os.getenv("APP_ENV", "development")).lower() == "production"
+_DEV_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?$"
+allowed_origin_regex = None if _is_production else _DEV_ORIGIN_REGEX
+
+
+def _origin_allowed(origin: str | None) -> bool:
+    if not origin:
+        return False
+    origin = origin.rstrip("/")
+    if origin in allowed_origins:
+        return True
+    return bool(allowed_origin_regex and _re.match(allowed_origin_regex, origin))
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_origin_regex=allowed_origin_regex,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(auth.router)
 
-# Global handlers so CORS headers are ALWAYS present even on unhandled or HTTP errors.
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
-    origin = request.headers.get("origin")
-    headers = dict(getattr(exc, "headers", None) or {})
-    if origin:
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Access-Control-Allow-Credentials"] = "true"
-        headers["Access-Control-Allow-Methods"] = "*"
-        headers["Access-Control-Allow-Headers"] = "*"
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail},
-        headers=headers
-    )
-
+# HTTPException responses already pass through CORSMiddleware. Unhandled exceptions are
+# produced outside it, so add CORS headers here -- but only for allowlisted origins.
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     origin = request.headers.get("origin")
     headers = {}
-    if origin:
+    if _origin_allowed(origin):
         headers["Access-Control-Allow-Origin"] = origin
         headers["Access-Control-Allow-Credentials"] = "true"
-        headers["Access-Control-Allow-Methods"] = "*"
-        headers["Access-Control-Allow-Headers"] = "*"
+        headers["Vary"] = "Origin"
     logger.error(f"Unhandled exception: {exc}\n{traceback.format_exc()}")
     return JSONResponse(
         status_code=500,

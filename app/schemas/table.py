@@ -8,6 +8,8 @@ class TableCreate(BaseModel):
     capacity: Optional[int] = 4
     status: Optional[str] = "Vacant"
     is_active: Optional[bool] = True
+    # Required for SUPER_ADMIN (which hotel); HOTEL_ADMIN is pinned to their own hotel by the route.
+    restaurant_id: Optional[int] = None
 
 class TableResponse(BaseModel):
     id: int
