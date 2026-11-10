@@ -40,13 +40,29 @@ def detect_language(text: str) -> str:
     return "en"
 
 
+STEM_MAP = {
+    'dosai': 'dosa', 'dosas': 'dosa',
+    'vadai': 'vada', 'vadas': 'vada',
+    'biriyani': 'biryani', 'briyani': 'biryani', 'biriyanis': 'biryani',
+    'parotha': 'parotta', 'parotta': 'parotta', 'parottas': 'parotta', 'parothas': 'parotta',
+    'idlis': 'idly', 'idli': 'idly', 'idlies': 'idly',
+    'poori': 'puri', 'poorir': 'puri',
+    'pongal': 'pongal',
+    'chappathi': 'chapati', 'chappathi': 'chapati', 'chapathi': 'chapati',
+}
+
+def stem_word(w: str) -> str:
+    cleaned = re.sub(r'[^a-z]', '', w.lower())
+    return STEM_MAP.get(cleaned, cleaned)
+
+
 def _clean_token(t: str) -> str:
-    return re.sub(r'[^a-z0-9]', '', t.lower())
+    return stem_word(t)
 
 
 def find_matching_menu_items(db: Session, query: str, restaurant_id: Optional[int] = None) -> List[MenuItem]:
     """
-    Finds matching menu items from real backend DB using strict keyword and exact-word matching.
+    Finds matching menu items from real backend DB using strict keyword, stem, and canonical-word matching.
     Prioritizes plain/canonical items (e.g. 'Idly (2)') over modified items ('Mini Kaima Idly').
     """
     q = db.query(MenuItem).filter(MenuItem.is_deleted == False)
@@ -64,54 +80,39 @@ def find_matching_menu_items(db: Session, query: str, restaurant_id: Optional[in
     clean_q = re.sub(r'\b(plate|plates|piece|pieces|nos|cup|cups|portion|portions)\b', '', clean_q).strip()
 
     # Filter out stopwords and numbers to get the core target dish name
-    tokens = [_clean_token(t) for t in clean_q.split() if _clean_token(t) not in STOPWORDS and not t.isdigit() and len(_clean_token(t)) > 1]
+    tokens = [stem_word(t) for t in clean_q.split() if stem_word(t) not in STOPWORDS and not t.isdigit() and len(stem_word(t)) > 1]
     
     if not tokens:
-        tokens = [_clean_token(t) for t in clean_q.split() if len(_clean_token(t)) > 1]
+        tokens = [stem_word(t) for t in clean_q.split() if len(stem_word(t)) > 1]
 
     scored = []
     core_dish_name = " ".join(tokens)
 
     for item in items:
         name_lower = item.name.lower()
-        # Clean item name tokens (e.g. "Idly (2)" -> ["idly"])
-        item_tokens = [re.sub(r'[^a-z0-9]', '', w) for w in name_lower.split() if re.sub(r'[^a-z0-9]', '', w)]
-        # Filter out numbers/portions from item name
-        clean_item_words = [w for w in item_tokens if not w.isdigit()]
+        # Stem all words in item name
+        clean_item_words = [stem_word(w) for w in name_lower.split() if stem_word(w)]
         
         score = 0
 
-        # 1. Exact pure name match (e.g. user said "idly" and item is "Idly (2)" or "Idly")
+        # 1. Exact pure name match (e.g. user said "idly" and item is "Idly (2)")
         if clean_item_words == tokens:
-            score += 500
-        elif tokens and clean_item_words and tokens[0] == clean_item_words[0] and len(clean_item_words) == 1:
-            # Standalone match! e.g. "Idly" vs "Kaima Idly"
-            score += 450
-        elif tokens and clean_item_words and tokens[0] in clean_item_words:
-            # Token is inside item words. Give penalty for extra preceding modifiers (like "Kaima", "Chilli")
-            idx = clean_item_words.index(tokens[0])
-            if idx == 0:
-                score += 300 - (len(clean_item_words) - len(tokens)) * 20
-            else:
-                # Modified dish (e.g. "Mini Kaima Idly" when user just said "Idly")
-                score += 150 - idx * 30
+            score += 1000
+        else:
+            # Check how many user tokens are matched
+            matched_count = sum(1 for t in tokens if any(t == w or (len(t) > 3 and t in w) for w in clean_item_words))
+            
+            if tokens and matched_count == len(tokens):
+                # Matched ALL user query tokens! Massive bonus!
+                score += 500 + (matched_count * 150) - (len(clean_item_words) * 15)
+                if clean_item_words and tokens and clean_item_words[0] == tokens[0]:
+                    score += 50  # starts with target token
+            elif matched_count > 0:
+                score += matched_count * 40
 
-        # Exact substring
+        # Exact substring bonus
         if core_dish_name and core_dish_name in name_lower:
             score += 80
-
-        # Token overlap
-        matched_tokens = 0
-        for token in tokens:
-            if any(token == w for w in clean_item_words):
-                score += 40
-                matched_tokens += 1
-            elif any(token in w for w in clean_item_words):
-                score += 20
-                matched_tokens += 1
-
-        if tokens and matched_tokens == len(tokens):
-            score += 30
 
         if score > 0:
             scored.append((score, item))
@@ -304,7 +305,13 @@ def process_mobile_voice_turn(
             "transcribed_user_text": raw_text
         }
 
-    if re.search(r'\b(go to my cart|open cart|view cart|show cart|my cart)\b', clean_lower):
+    if (
+        re.search(r'^(go to (my )?cart|open (the |my )?cart|view (the |my )?cart|show (the |my )?cart|my cart|cart)$', clean_lower)
+        or (
+            re.search(r'\b(go to cart|open cart|view cart|show cart|my cart)\b', clean_lower)
+            and not re.search(r'\b(add|put|order|remove|delete|insert|idly|dosa|biryani|rice|coffee|tea|vada|vadai)\b', clean_lower)
+        )
+    ):
         reply = "உங்கள் கார்ட் திரைக்கு செல்கிறேன்." if lang in ("ta", "tanglish") else "Opening your cart."
         return {
             "assistant_text": reply,
@@ -587,8 +594,13 @@ def process_mobile_voice_turn(
     if matched_items:
         first_item = matched_items[0]
 
-        # Ambiguity check
-        if len(matched_items) > 1 and len(clean_lower.split()) <= 2 and not is_asking_to_add:
+        # Check if top item is an exact canonical match (e.g. user said "idly" -> "Idly (2)")
+        top_name_words = [re.sub(r'[^a-z]', '', w) for w in first_item.name.lower().split() if re.sub(r'[^a-z]', '', w)]
+        user_dish_tokens = [re.sub(r'[^a-z]', '', t) for t in clean_lower.split() if re.sub(r'[^a-z]', '', t) not in STOPWORDS and len(re.sub(r'[^a-z]', '', t)) > 1]
+        is_exact_canonical = bool(top_name_words and user_dish_tokens and top_name_words == user_dish_tokens)
+
+        # Ambiguity check: only prompt when NO exact canonical match exists
+        if not is_exact_canonical and len(matched_items) > 1 and len(clean_lower.split()) <= 2 and not is_asking_to_add:
             candidates = [f"{item.name} (₹{item.price})" for item in matched_items[:3]]
             cand_str = ", ".join(candidates)
             if lang in ("ta", "tanglish"):
