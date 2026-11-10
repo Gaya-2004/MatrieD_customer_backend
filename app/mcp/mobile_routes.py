@@ -31,7 +31,7 @@ from typing import Any, Dict, Optional
 from ..utils.dependencies import get_db
 from ..schemas.mobile_mcp import MobileCustomerMCPRequest, MobileCustomerMCPResponse, UIAction, MobileAgentData
 from ..prompts.mobile_customer_agent import MOBILE_CUSTOMER_AGENT_PROMPT
-from .client import GeminiClient
+from .client import GeminiClient, is_gemini_billing_blocked, record_gemini_billing_error
 from .routes import _generate_tts_audio
 
 logger = logging.getLogger(__name__)
@@ -620,14 +620,23 @@ async def mobile_customer_chat(
         )
 
         parsed = None
-        try:
-            import asyncio
-            parsed = await asyncio.wait_for(
-                client.generate_json(full_prompt, audio_base64=request.audio_base64),
-                timeout=1.5
-            )
-        except Exception as gemini_err:
-            logger.warning(f"[MobileCustomerChat] Gemini LLM unavailable/slow ({gemini_err}); activating smart customer agent fallback.")
+        if not is_gemini_billing_blocked():
+            try:
+                import asyncio
+                parsed = await asyncio.wait_for(
+                    client.generate_json(full_prompt, audio_base64=request.audio_base64),
+                    timeout=1.5
+                )
+            except Exception as gemini_err:
+                err_str = str(gemini_err)
+                if "402" in err_str or "Payment Required" in err_str:
+                    record_gemini_billing_error(120.0)
+                    logger.warning(
+                        "[MobileCustomerChat] Google AI Studio credits depleted (402 Payment Required). "
+                        "Seamlessly using high-speed Smart Customer Agent fallback (0ms delay)."
+                    )
+                else:
+                    logger.warning(f"[MobileCustomerChat] Gemini LLM unavailable/slow ({gemini_err}); activating smart customer agent fallback.")
 
         if not parsed or not isinstance(parsed, dict) or not parsed.get("assistant_text"):
             from ..services.smart_customer_agent import process_mobile_voice_turn

@@ -118,6 +118,19 @@ SUPPORTED_AUDIO_MIME = {
     "audio/flac",
 }
 
+_billing_cooldown_until: float = 0.0
+
+def is_gemini_billing_blocked() -> bool:
+    """Returns True if Gemini is in a cooldown period due to 402 Payment Required."""
+    import time
+    return time.time() < _billing_cooldown_until
+
+def record_gemini_billing_error(duration_sec: float = 120.0) -> None:
+    """Marks Gemini billing as depleted for the specified duration to avoid blocking user chat."""
+    global _billing_cooldown_until
+    import time
+    _billing_cooldown_until = time.time() + duration_sec
+
 if not GEMINI_API_KEY:
     import logging
     logging.getLogger(__name__).warning("GEMINI_API_KEY is not set. Gemini AI features will be disabled.")
@@ -235,10 +248,16 @@ class GeminiClient:
         canned "sorry, I didn't understand" reply, which reads to the customer
         as the agent being dumb rather than rate-limited.
         """
+        if is_gemini_billing_blocked():
+            raise RuntimeError("Gemini prepayment credits depleted (402). Circuit breaker active.")
+
         last_exc: Exception | None = None
         for attempt in range(_MAX_RETRIES):
             try:
                 response = await self._http().post(url, json=payload)
+                if response.status_code == 402:
+                    record_gemini_billing_error(120.0)
+                    response.raise_for_status()
                 if response.status_code in (429, 500, 502, 503, 504):
                     if attempt < _MAX_RETRIES - 1:
                         retry_after = response.headers.get("retry-after", "")
