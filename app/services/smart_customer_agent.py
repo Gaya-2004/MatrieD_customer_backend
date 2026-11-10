@@ -423,9 +423,9 @@ def process_mobile_voice_turn(
         }
 
     # -------------------------------------------------------------
-    # 7. CART TOTAL / BILL SUMMARY
+    # 7. CART TOTAL / BILL SUMMARY (Food price only, NO TAX)
     # -------------------------------------------------------------
-    if re.search(r'\b(what is my total|what\'s my total|how much is my bill|total amount|bill summary|calculate total)\b', clean_lower):
+    if re.search(r'\b(what is my total|what\'s my total|how much is my bill|total amount|bill summary|calculate total|total|subtotal|bill|bill amount|what is the bill)\b', clean_lower):
         if not cart_items:
             reply = "உங்கள் கார்ட் தற்போது காலியாக உள்ளது." if lang in ("ta", "tanglish") else "Your cart is currently empty. Please add items to view your total."
             return {
@@ -435,13 +435,11 @@ def process_mobile_voice_turn(
                 "requires_confirmation": False,
                 "transcribed_user_text": raw_text
             }
-        subtotal = sum(float(i.get("price", 0)) * int(i.get("quantity", 1)) for i in cart_items)
-        gst = round(subtotal * 0.05, 2)
-        total = round(subtotal + gst, 2)
+        total = round(sum(float(i.get("price", 0)) * int(i.get("quantity", 1)) for i in cart_items), 2)
         if lang in ("ta", "tanglish"):
-            reply = f"உணவுத் தொகை ₹{subtotal}. வரிகள் ₹{gst}. நீங்கள் செலுத்த வேண்டிய மொத்த தொகை ₹{total}."
+            reply = f"உணவுத் தொகை மற்றும் நீங்கள் செலுத்த வேண்டிய மொத்த தொகை ₹{total}."
         else:
-            reply = f"Your subtotal is ₹{subtotal}. Taxes and charges are ₹{gst}. Your total payable amount is ₹{total}."
+            reply = f"Your food total is ₹{total}. Total payable is ₹{total} (no taxes added)."
         return {
             "assistant_text": reply,
             "ui_actions": [],
@@ -464,15 +462,13 @@ def process_mobile_voice_turn(
                 "transcribed_user_text": raw_text
             }
 
-        subtotal = sum(float(i.get("price", 0)) * int(i.get("quantity", 1)) for i in cart_items)
-        gst = round(subtotal * 0.05, 2)
-        total = round(subtotal + gst, 2)
+        total = round(sum(float(i.get("price", 0)) * int(i.get("quantity", 1)) for i in cart_items), 2)
 
         items_breakdown = ", ".join([f"{i.get('name')} ({i.get('quantity')} x ₹{i.get('price')})" for i in cart_items])
         if lang in ("ta", "tanglish"):
-            reply = f"உங்கள் ஆர்டர் விவரங்கள்: {items_breakdown}. உணவுத் தொகை ₹{subtotal}, வரி ₹{gst}, மொத்த தொகை ₹{total}. இந்த ஆர்டரை பதிவு செய்யலாமா?"
+            reply = f"உங்கள் ஆர்டர் விவரங்கள்: {items_breakdown}. செலுத்த வேண்டிய மொத்த தொகை ₹{total}. இந்த ஆர்டரை பதிவு செய்யலாமா?"
         else:
-            reply = f"Your order summary: {items_breakdown}. Subtotal is ₹{subtotal}, Tax is ₹{gst}, Total payable is ₹{total}. Would you like to place this order?"
+            reply = f"Your order summary: {items_breakdown}. Total payable is ₹{total}. Would you like to place this order?"
         
         return {
             "assistant_text": reply,
