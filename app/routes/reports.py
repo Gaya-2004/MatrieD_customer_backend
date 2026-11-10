@@ -542,16 +542,11 @@ def _build_sales_report(
     utc_end = end_of_day - timedelta(hours=5, minutes=30)
 
     # ── Source filtering ─────────────────────────────────────────────────────
-    cashier_cond = or_(
-        Order.order_source == "CASHIER_POS",
-        Order.user_id.isnot(None)
-    )
-    mobile_cond = and_(
-        Order.user_id.is_(None),
-        or_(
-            Order.order_source == "CUSTOMER_APP",
-            Order.order_source.is_(None)
-        )
+    cashier_cond = Order.order_source == "CASHIER_POS"
+    mobile_cond = or_(
+        Order.order_source == "CUSTOMER_APP",
+        Order.order_source.is_(None),
+        Order.order_source != "CASHIER_POS"
     )
 
     q = db.query(Order).options(
@@ -623,7 +618,7 @@ def _build_sales_report(
         amount = float(o.total_amount or 0.0)
         total_sales += amount
 
-        is_cashier_order = (getattr(o, "order_source", None) == "CASHIER_POS" or o.user_id is not None)
+        is_cashier_order = (getattr(o, "order_source", None) == "CASHIER_POS")
         if is_cashier_order:
             cashier_sales += amount
             cashier_orders_count += 1
@@ -673,7 +668,7 @@ def _build_sales_report(
         amount = float(o.total_amount or 0.0)
         local_time = o.created_at + timedelta(hours=5, minutes=30)
 
-        is_cashier_order = (getattr(o, "order_source", None) == "CASHIER_POS" or o.user_id is not None)
+        is_cashier_order = (getattr(o, "order_source", None) == "CASHIER_POS")
         source_key = "CASHIER" if is_cashier_order else "MOBILE"
         source_badge = "(C)" if is_cashier_order else "(M)"
         source_label = "(C) Cashier" if is_cashier_order else "(M) Mobile"
@@ -776,8 +771,8 @@ def _build_sales_report(
         last = target_boundary_orders[-1]
         first_local = first.created_at + timedelta(hours=5, minutes=30)
         last_local = last.created_at + timedelta(hours=5, minutes=30)
-        first_is_c = (getattr(first, "order_source", None) == "CASHIER_POS" or first.user_id is not None)
-        last_is_c = (getattr(last, "order_source", None) == "CASHIER_POS" or last.user_id is not None)
+        first_is_c = (getattr(first, "order_source", None) == "CASHIER_POS")
+        last_is_c = (getattr(last, "order_source", None) == "CASHIER_POS")
         starting_order = {
             "id": f"ORD-{str(first.id).zfill(6)}",
             "time": first_local.strftime("%I:%M:%S %p"),
