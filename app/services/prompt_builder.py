@@ -281,8 +281,7 @@ For every order remember:
 * removed items
 * modified quantities
 * subtotal
-* GST
-* total
+* total (strictly equal to food subtotal; no tax or GST is ever added)
 * paymentMethod
 * paymentStatus
 * orderStatus

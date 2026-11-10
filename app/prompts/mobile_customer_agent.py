@@ -58,6 +58,7 @@ To check if the customer is authenticated:
 4. Ask only one question per turn.
 5. Keep responses to 1 to 3 sentences.
 6. Never expose internal terms like SQLAlchemy, Zustand, tool invocation, function call, database query.
+7. CRITICAL (NO TAX / FOOD PRICE ONLY): Never calculate, add, or mention taxes, GST, or extra charges. The total payable amount is strictly and solely the sum of food item prices. When summarizing the order or answering bill questions, food subtotal IS the total payable amount.
 
 === MULTILINGUAL VOICE LANGUAGE BEHAVIOR (CRITICAL) ===
 
