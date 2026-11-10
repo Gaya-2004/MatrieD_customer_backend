@@ -78,7 +78,9 @@ def seed_defaults(db: Session = None):
         ]
 
         for u in users_to_seed:
-            existing = db.query(User).filter(User.email == u["email"]).first()
+            existing = db.query(User).filter(
+                (User.email == u["email"]) | (User.phone == u["phone"])
+            ).first()
             if not existing:
                 new_user = User(
                     email=u["email"],
@@ -114,7 +116,7 @@ def seed_defaults(db: Session = None):
         if not cust:
             cust = Customer(
                 id=1,
-                name="Guest User",
+                name="Test User(Testing Purpose only)",
                 phone="+919876543210",
                 email="guest@maitred.com",
                 loyalty_points=50,
@@ -122,7 +124,35 @@ def seed_defaults(db: Session = None):
             db.add(cust)
             db.commit()
             print("[SEED] Created default customer: Guest User (ID: 1)")
+            
+        # 5. Seed Default Delivery Partner if missing
+        from .models.delivery import DeliveryPartner
+        rider = db.query(DeliveryPartner).filter(DeliveryPartner.phone == "9876543210").first()
+        if not rider:
+            rider = DeliveryPartner(
+                name="Ramesh Kumar",
+                phone="9876543210",
+                email="ramesh.rider@maitred.com",
+                vehicle_type="Bike",
+                vehicle_number="KA01AB1234",
+                vehicle_brand="Honda",
+                vehicle_model="Activa 6G",
+                fuel_type="Petrol",
+                vehicle_color="Black",
+                rating=4.9,
+                total_ratings=32,
+                total_rides=58,
+                is_online=True,
+                is_available=True,
+                is_active=True,
+                current_latitude=12.9716,
+                current_longitude=77.5946,
+                password_hash=hash_password("Password@123")
+            )
+            db.add(rider)
+            print("[SEED] Created default rider: Ramesh Kumar (9876543210)")
 
+        db.commit()
         print("[SEED] Database seeding check completed.")
     except Exception as e:
         db.rollback()

@@ -571,10 +571,10 @@ async def mobile_customer_chat(
             categories = categories.filter(MenuCategory.restaurant_id == request.restaurant_id)
             menu_items = menu_items.filter(MenuItem.restaurant_id == request.restaurant_id)
 
-        cat_names = [{"id": c.id, "name": c.name} for c in categories.all()]
+        cat_names = [{"id": c.id, "name": c.name} for c in categories.limit(30).all()]
         items = [
             {"id": i.id, "name": i.name, "price": i.price, "category_id": i.category_id}
-            for i in menu_items.all()
+            for i in menu_items.limit(80).all()
         ]
 
         sys_prompt = MOBILE_CUSTOMER_AGENT_PROMPT + "\n\n=== LIVE BACKEND CONTEXT ===\n"
@@ -596,8 +596,21 @@ async def mobile_customer_chat(
             history_text += "----------------------------\n"
 
         user_input = request.message
+        transcribed_text = None
+        if request.audio_base64 and not user_input:
+            from ..services.speech_service import transcribe_audio_base64
+            transcribed_text = transcribe_audio_base64(request.audio_base64)
+            if transcribed_text:
+                user_input = transcribed_text
+                logger.info(f"[MobileCustomerChat] Transcribed customer speech: '{user_input}'")
+            else:
+                return MobileCustomerMCPResponse(
+                    assistant_text="I couldn't hear that clearly. Could you please tap Speak and say that again?",
+                    transcribed_user_text="",
+                )
+
         if not user_input and not request.audio_base64:
-            return MobileCustomerMCPResponse(assistant_text="How can I help you?")
+            return MobileCustomerMCPResponse(assistant_text="How can I help you today?")
 
         full_prompt = (
             f"{sys_prompt}\n\n"
@@ -606,15 +619,42 @@ async def mobile_customer_chat(
             "Respond with valid JSON only."
         )
 
-        parsed = await client.generate_json(full_prompt, audio_base64=request.audio_base64)
+        parsed = None
+        try:
+            import asyncio
+            parsed = await asyncio.wait_for(
+                client.generate_json(full_prompt, audio_base64=request.audio_base64),
+                timeout=1.5
+            )
+        except Exception as gemini_err:
+            logger.warning(f"[MobileCustomerChat] Gemini LLM unavailable/slow ({gemini_err}); activating smart customer agent fallback.")
+
+        if not parsed or not isinstance(parsed, dict) or not parsed.get("assistant_text"):
+            from ..services.smart_customer_agent import process_mobile_voice_turn
+            screen_name = request.screen.get("route") if request.screen else None
+            cust_name = request.app_context.get("auth", {}).get("customerName") if request.app_context else None
+            hist_list = [{"role": m.role, "text": m.text} for m in (request.chat_history or [])]
+            parsed = process_mobile_voice_turn(
+                user_text=user_input,
+                db=db,
+                restaurant_id=request.restaurant_id,
+                customer_phone=request.phone,
+                customer_name=cust_name,
+                current_screen=screen_name,
+                cart=request.cart,
+                chat_history=hist_list,
+            )
 
         assistant_text = parsed.get("assistant_text", "I'm sorry, I couldn't process that.")
         ui_actions_raw = parsed.get("ui_actions", [])
         data_raw = parsed.get("data", {})
 
+        from ..services.smart_customer_agent import detect_language
+        lang_hint = detect_language(assistant_text)
+
         audio_payload = None
         if assistant_text and len(assistant_text) < 500:
-            audio_payload = await _generate_tts_audio(assistant_text)
+            audio_payload = await _generate_tts_audio(assistant_text, lang_hint=lang_hint)
 
         ui_actions = [UIAction(**action) for action in ui_actions_raw]
         data = MobileAgentData(**data_raw)
@@ -625,7 +665,7 @@ async def mobile_customer_chat(
             data=data,
             requires_confirmation=parsed.get("requires_confirmation", False),
             audio_base64=audio_payload,
-            transcribed_user_text=parsed.get("transcribed_user_text"),
+            transcribed_user_text=transcribed_text or parsed.get("transcribed_user_text"),
         )
 
     except Exception as e:

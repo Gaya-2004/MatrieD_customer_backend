@@ -13,3 +13,6 @@ dataudipi.db
 *.db-wal
 *.db-*
 inspect_schema.py
+*.code-workspace
+static/rider_documents/*
+!static/rider_documents/.gitkeep

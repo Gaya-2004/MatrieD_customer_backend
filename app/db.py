@@ -14,10 +14,18 @@ logger = logging.getLogger(__name__)
 raw_url = os.getenv("DATABASE_URL", "").strip()
 db_password = os.getenv("DB_PASSWORD") or os.getenv("PGPASSWORD")
 APP_ENV = os.getenv("APP_ENV", "development").lower()
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def resolve_db_url(url: str, password: str = None) -> str:
     if not url:
-        return "sqlite:///restaurant.db"
+        default_db = os.path.join(BASE_DIR, "restaurant.db").replace("\\", "/")
+        return f"sqlite:///{default_db}"
+    if url.startswith("sqlite:///"):
+        sub = url[len("sqlite:///"):]
+        if not os.path.isabs(sub) and not sub.startswith(":memory:"):
+            abs_path = os.path.normpath(os.path.join(BASE_DIR, sub)).replace("\\", "/")
+            return f"sqlite:///{abs_path}"
+        return url
     if url.startswith("psql"):
         host_m = re.search(r'-h\s+([^\s]+)', url)
         user_m = re.search(r'-U\s+([^\s]+)', url)
@@ -29,18 +37,26 @@ def resolve_db_url(url: str, password: str = None) -> str:
         user = user_m.group(1) if user_m else "postgres"
         db = db_m.group(1) if db_m else "postgres"
         port = port_m.group(1) if port_m else "5432"
+
+        if not password and user == "maitred_dev_user":
+            password = "maitred_dev_pA$$W0rD"
         
         extracted_pwd = pwd_m.group(1) if pwd_m else None
         effective_pwd = password or extracted_pwd
         if not effective_pwd and user == "maitred_dev_user":
             effective_pwd = "maitred_dev_pA$$W0rD"
             
-        pwd_part = f":{urllib.parse.quote_plus(effective_pwd)}" if effective_pwd else ""
-        return f"postgresql+psycopg2://{user}{pwd_part}@{host}:{port}/{db}"
+        pwd_encoded = urllib.parse.quote_plus(effective_pwd) if effective_pwd else ""
+        pwd_part = f":{pwd_encoded}" if pwd_encoded else ""
+        ssl_part = "?sslmode=require" if "rds.amazonaws.com" in host else ""
+        return f"postgresql+psycopg2://{user}{pwd_part}@{host}:{port}/{db}{ssl_part}"
     if url.startswith("postgres://"):
-        return url.replace("postgres://", "postgresql+psycopg2://", 1)
-    if url.startswith("postgresql://") and not url.startswith("postgresql+"):
-        return url.replace("postgresql://", "postgresql+psycopg2://", 1)
+        url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif url.startswith("postgresql://") and not url.startswith("postgresql+"):
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    if "rds.amazonaws.com" in url and "sslmode" not in url:
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}sslmode=require"
     return url
 
 DATABASE_URL = resolve_db_url(raw_url, db_password)
@@ -92,7 +108,10 @@ from sqlalchemy import event
 @event.listens_for(engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
     if DATABASE_URL.startswith("sqlite"):
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA synchronous=NORMAL")
-        cursor.close()
+        try:
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.close()
+        except Exception as e:
+            logger.warning(f"Could not set SQLite PRAGMA: {e}")

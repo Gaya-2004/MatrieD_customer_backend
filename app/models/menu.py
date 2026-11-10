@@ -24,6 +24,7 @@ class MenuItem(Base):
     category_id = Column(Integer, ForeignKey("menu_categories.id"), index=True)
     item_code = Column(String, index=True, nullable=True)
     ac_type = Column(String, default="Both")
+    food_type = Column(String, nullable=True, default="Veg")
     name = Column(String, index=True)
     description = Column(Text, nullable=True)
     price = Column(Float)
