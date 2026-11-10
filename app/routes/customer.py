@@ -2723,7 +2723,7 @@ def get_public_order(
 @router.get("/api/v1/public/customers/orders")
 def get_customer_orders_by_phone(
     phone: str, 
-    restaurant_id: int = 1, 
+    restaurant_id: Optional[int] = None, 
     current_customer: Customer = Depends(get_current_customer),
     db: Session = Depends(get_db)
 ):
@@ -2756,20 +2756,21 @@ def get_customer_orders_by_phone(
         Order.customer_phone == norm_curr,
     ]
 
-    orders = (
+    orders_query = (
         db.query(Order)
         .options(joinedload(Order.items).joinedload(OrderItem.menu_item))
-        .filter(Order.restaurant_id == restaurant_id)
         .filter(or_(Order.order_source == "CUSTOMER_APP", Order.order_source.is_(None)))
         .filter(Order.customer_phone.isnot(None))
         .filter(or_(*filters))
-        .order_by(Order.created_at.desc())
-        .limit(50)
-        .all()
     )
+    if restaurant_id is not None and int(restaurant_id) > 0:
+        orders_query = orders_query.filter(Order.restaurant_id == restaurant_id)
+
+    orders = orders_query.order_by(Order.created_at.desc()).limit(50).all()
 
 
     table_number_map = build_table_number_map(db, orders)
+    rest_map = {r.id: r.name for r in db.query(Restaurant).all()}
     result = []
     grouped_dine_in = {}
 
@@ -2855,6 +2856,7 @@ def get_customer_orders_by_phone(
                         "id": order.id,
                         "orderId": f"ORD-{str(order.id).zfill(6)}",
                         "restaurant_id": order.restaurant_id,
+                        "restaurant_name": rest_map.get(order.restaurant_id, "MaitreD"),
                         "table_number": resolve_order_table_number(order, table_number_map),
                         "order_type": getattr(order, "order_type", "DINE_IN"),
                         "bill_no": order.bill_no,
@@ -2881,6 +2883,7 @@ def get_customer_orders_by_phone(
                     "id": order.id,
                     "orderId": f"ORD-{str(order.id).zfill(6)}",
                     "restaurant_id": order.restaurant_id,
+                    "restaurant_name": rest_map.get(order.restaurant_id, "MaitreD"),
                     "table_number": resolve_order_table_number(order, table_number_map),
                     "order_type": getattr(order, "order_type", "DINE_IN"),
                     "bill_no": order.bill_no,
