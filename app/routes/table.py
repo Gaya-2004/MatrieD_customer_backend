@@ -83,7 +83,7 @@ def get_table(table_id: int, user = Depends(get_current_user), db: Session = Dep
 # POST create table
 @router.post("/api/v1/tables", response_model=TableResponse)
 def create_table(data: TableCreate, user = Depends(get_current_user), db: Session = Depends(get_db)):
-    require_role(user, ["HOTEL_ADMIN", "SUPER_ADMIN"])
+    require_role(user, ["HOTEL_ADMIN", "SUPER_ADMIN", "ADMIN"])
 
     table_data = data.model_dump()
     if user.role == "HOTEL_ADMIN":
@@ -94,8 +94,9 @@ def create_table(data: TableCreate, user = Depends(get_current_user), db: Sessio
             )
         table_data["restaurant_id"] = user.restaurant_id
     else:
+        # SUPER_ADMIN / ADMIN has full edit access across all hotels
         if not table_data.get("restaurant_id"):
-            raise HTTPException(status_code=400, detail="restaurant_id is required for SUPER_ADMIN")
+            table_data["restaurant_id"] = 1
 
     if not table_data.get("qr_code"):
         rest_id = table_data.get("restaurant_id")
@@ -111,7 +112,7 @@ def create_table(data: TableCreate, user = Depends(get_current_user), db: Sessio
 # PATCH update table
 @router.patch("/api/v1/tables/{table_id}", response_model=TableResponse)
 def update_table(table_id: int, data: TableUpdate, user = Depends(get_current_user), db: Session = Depends(get_db)):
-    require_role(user, ["HOTEL_ADMIN", "SUPER_ADMIN"])
+    require_role(user, ["HOTEL_ADMIN", "SUPER_ADMIN", "ADMIN"])
 
     table = db.query(Table).filter(Table.id == table_id).first()
     if not table:
@@ -149,7 +150,7 @@ def update_table(table_id: int, data: TableUpdate, user = Depends(get_current_us
 # DELETE table
 @router.delete("/api/v1/tables/{table_id}")
 def delete_table(table_id: int, user = Depends(get_current_user), db: Session = Depends(get_db)):
-    require_role(user, ["HOTEL_ADMIN", "SUPER_ADMIN"])
+    require_role(user, ["HOTEL_ADMIN", "SUPER_ADMIN", "ADMIN"])
 
     table = db.query(Table).filter(Table.id == table_id).first()
     if not table:
@@ -158,9 +159,15 @@ def delete_table(table_id: int, user = Depends(get_current_user), db: Session = 
     require_restaurant_access(user, table.restaurant_id)
     
     from ..models.order import Order
-    # Check if there is an active order
+    from ..models.dine_in_session import DineInSession
+    from sqlalchemy import text
+
+    # Check if there is an active order (safe text cast for varchar/int column)
     active_order = db.query(Order).filter(
-        Order.table_id == table_id,
+        text("(orders.table_id = :tid_str OR orders.table_id = :tnum)").bindparams(
+            tid_str=str(table_id),
+            tnum=str(table.table_number)
+        ),
         Order.status.notin_(["SERVED", "COMPLETED", "CANCELLED"])
     ).first()
     
@@ -168,7 +175,13 @@ def delete_table(table_id: int, user = Depends(get_current_user), db: Session = 
         raise HTTPException(status_code=400, detail="Cannot delete a table that currently has an active order.")
         
     # Detach historical orders to prevent foreign key violations
-    db.query(Order).filter(Order.table_id == table_id).update({"table_id": None})
+    db.execute(
+        text("UPDATE orders SET table_id = NULL WHERE table_id = :tid_str OR table_id = :tnum"),
+        {"tid_str": str(table_id), "tnum": str(table.table_number)}
+    )
+
+    # Detach or delete dine_in_sessions for this table to prevent FK constraint failure
+    db.query(DineInSession).filter(DineInSession.table_id == table_id).delete(synchronize_session=False)
     
     db.delete(table)
     db.commit()

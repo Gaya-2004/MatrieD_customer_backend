@@ -82,11 +82,11 @@ async def serve_image(filename: str):
         item = db.query(MenuItem).filter(MenuItem.image_url.like(f"%{filename}%")).first()
         dish_name = item.name if item else "Delicious Food"
         encoded_name = urllib.parse.quote(dish_name)
-        fallback_url = f"https://image.pollinations.ai/prompt/Delicious%20{encoded_name}%20food%20plating?width=800&height=600&nologo=true"
+        fallback_url = f"https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&q=80"
         return RedirectResponse(url=fallback_url)
     except Exception as e:
         logger.error(f"Fallback image error: {e}")
-        return RedirectResponse(url="https://via.placeholder.com/150?text=No+Image")
+        return RedirectResponse(url="https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&q=80")
     finally:
         db.close()
 
@@ -116,19 +116,36 @@ else:
 
 app.include_router(auth.router)
 
-# Global handler so CORS headers are present even on unhandled errors.
+# Global handlers so CORS headers are ALWAYS present even on unhandled or HTTP errors.
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    origin = request.headers.get("origin")
+    headers = dict(getattr(exc, "headers", None) or {})
+    if origin:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Access-Control-Allow-Methods"] = "*"
+        headers["Access-Control-Allow-Headers"] = "*"
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=headers
+    )
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    if isinstance(exc, HTTPException):
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"detail": exc.detail},
-            headers=getattr(exc, "headers", None)
-        )
+    origin = request.headers.get("origin")
+    headers = {}
+    if origin:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Access-Control-Allow-Methods"] = "*"
+        headers["Access-Control-Allow-Headers"] = "*"
     logger.error(f"Unhandled exception: {exc}\n{traceback.format_exc()}")
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal Server Error"}
+        content={"detail": "Internal Server Error"},
+        headers=headers
     )
 app.include_router(menu.router)
 app.include_router(orders.router)
